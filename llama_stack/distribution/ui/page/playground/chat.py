@@ -12,7 +12,7 @@ import streamlit as st
 from llama_stack_client import Agent, AgentEventLogger
 from llama_stack_client.lib.agents.react.agent import ReActAgent
 from llama_stack_client.lib.agents.react.tool_parser import ReActOutput
-from llama_stack_client.types import ToolCallDelta
+from llama_stack.apis.common.content_types import ToolCallDelta
 from llama_stack.distribution.ui.modules.api import llama_stack_api
 
 

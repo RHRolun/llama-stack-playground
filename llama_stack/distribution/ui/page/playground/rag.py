@@ -9,7 +9,7 @@ import uuid
 import streamlit as st
 from llama_stack_client import Agent, AgentEventLogger, RAGDocument
 
-from llama_stack_client.types import ToolCallDelta
+from llama_stack.apis.common.content_types import ToolCallDelta
 from llama_stack.distribution.ui.modules.api import llama_stack_api
 from llama_stack.distribution.ui.modules.utils import data_url_from_file
 
