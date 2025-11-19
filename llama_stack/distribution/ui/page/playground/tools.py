@@ -26,7 +26,7 @@ def tool_chat_page():
 
     client = llama_stack_api.client
     models = client.models.list()
-    model_list = [model.identifier for model in models if model.api_model_type == "llm"]
+    model_list = [model.identifier for model in models if model.model_type == "llm"]
 
     tool_groups = client.toolgroups.list()
     tool_groups_list = [tool_group.identifier for tool_group in tool_groups]
@@ -55,10 +55,10 @@ def tool_chat_page():
         )
 
         if "builtin::rag" in toolgroup_selection:
-            vector_dbs = llama_stack_api.client.vector_dbs.list() or []
-            if not vector_dbs:
-                st.info("No vector databases available for selection.")
-            vector_dbs = [vector_db.identifier for vector_db in vector_dbs]
+            vector_stores = llama_stack_api.client.vector_stores.list() or []
+            if not vector_stores.data:
+                st.info("No vector stores available for selection.")
+            vector_dbs = [vector_store.id for vector_store in vector_stores.data]
             selected_vector_dbs = st.multiselect(
                 label="Select Document Collections to use in RAG queries",
                 options=vector_dbs,

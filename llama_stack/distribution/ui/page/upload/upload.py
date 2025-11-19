@@ -1,7 +1,7 @@
 import streamlit as st
 from llama_stack_client import RAGDocument
-from modules.api import llama_stack_api
-from modules.utils import data_url_from_file
+from llama_stack.distribution.ui.modules.api import llama_stack_api
+from llama_stack.distribution.ui.modules.utils import data_url_from_file
 
 def upload_page():
     """
@@ -42,20 +42,41 @@ def upload_page():
                 if x.api == "vector_io":
                     vector_io_provider = x.provider_id
 
-            # Register new vector database
-            llama_stack_api.client.vector_dbs.register(
-                vector_db_id=vector_db_name,
-                embedding_dimension=384,
-                embedding_model="all-MiniLM-L6-v2",
-                provider_id=vector_io_provider,
+            # Create new vector store using modern API
+            vs = llama_stack_api.client.vector_stores.create(
+                name=vector_db_name,
+                extra_body={
+                    "embedding_model": "all-MiniLM-L6-v2",
+                    "embedding_dimension": 384,
+                    "provider_id": vector_io_provider,
+                }
             )
 
-            # Insert documents into the vector database
-            llama_stack_api.client.tool_runtime.rag_tool.insert(
-                vector_db_id=vector_db_name,
-                documents=documents,
-                chunk_size_in_tokens=512,
-            )
+            # Insert documents into the vector store using modern API
+            for doc in documents:
+                # Create a file from the document content
+                from io import BytesIO
+                file_content = BytesIO(doc.content.encode('utf-8'))
+                file_content.name = f"{doc.document_id}.txt"
+                
+                # Upload file using the files API
+                uploaded_file = llama_stack_api.client.files.create(
+                    file=file_content,
+                    purpose="assistants"
+                )
+                
+                # Add the file to the vector store with chunking configuration
+                llama_stack_api.client.vector_stores.files.create(
+                    vector_store_id=vs.id,
+                    file_id=uploaded_file.id,
+                    chunking_strategy={
+                        "type": "static",
+                        "static": {
+                            "max_chunk_size_tokens": 512,
+                            "chunk_overlap_tokens": 50
+                        }
+                    }
+                )
             st.success("Vector database created successfully!")
             # Reset form fields
             uploaded_files.clear()

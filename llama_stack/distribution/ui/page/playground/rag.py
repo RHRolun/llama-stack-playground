@@ -9,7 +9,7 @@ import uuid
 import streamlit as st
 from llama_stack_client import Agent, AgentEventLogger, RAGDocument
 
-from llama_stack.apis.common.content_types import ToolCallDelta
+from llama_stack_client.types import ToolCallDelta
 from llama_stack.distribution.ui.modules.api import llama_stack_api
 from llama_stack.distribution.ui.modules.utils import data_url_from_file
 
@@ -64,19 +64,41 @@ def rag_chat_page():
                     if x.api == "vector_io":
                         vector_io_provider = x.provider_id
 
-                llama_stack_api.client.vector_dbs.register(
-                    vector_db_id=vector_db_name,  # Use the user-provided name
-                    embedding_dimension=384,
-                    embedding_model="all-MiniLM-L6-v2",
-                    provider_id=vector_io_provider,
+                # Create new vector store using modern API
+                vs = llama_stack_api.client.vector_stores.create(
+                    name=vector_db_name,  # Use the user-provided name
+                    extra_body={
+                        "embedding_model": "all-MiniLM-L6-v2",
+                        "embedding_dimension": 384,
+                        "provider_id": vector_io_provider,
+                    }
                 )
 
-                # insert documents using the custom vector db name
-                llama_stack_api.client.tool_runtime.rag_tool.insert(
-                    vector_db_id=vector_db_name,  # Use the user-provided name
-                    documents=documents,
-                    chunk_size_in_tokens=512,
-                )
+                # insert documents using the modern vector stores API
+                for doc in documents:
+                    # Create a file from the document content
+                    from io import BytesIO
+                    file_content = BytesIO(doc.content.encode('utf-8'))
+                    file_content.name = f"{doc.document_id}.txt"
+                    
+                    # Upload file using the files API
+                    uploaded_file = llama_stack_api.client.files.create(
+                        file=file_content,
+                        purpose="assistants"
+                    )
+                    
+                    # Add the file to the vector store with chunking configuration
+                    llama_stack_api.client.vector_stores.files.create(
+                        vector_store_id=vs.id,
+                        file_id=uploaded_file.id,
+                        chunking_strategy={
+                            "type": "static",
+                            "static": {
+                                "max_chunk_size_tokens": 512,
+                                "chunk_overlap_tokens": 50
+                            }
+                        }
+                    )
                 st.success("Vector database created successfully!")
 
         st.subheader("RAG Parameters", divider=True)
@@ -92,9 +114,9 @@ def rag_chat_page():
             disabled=should_disable_input(),
         )
 
-        # select memory banks
-        vector_dbs = llama_stack_api.client.vector_dbs.list()
-        vector_dbs = [vector_db.identifier for vector_db in vector_dbs]
+        # select memory banks (vector stores)
+        vector_stores = llama_stack_api.client.vector_stores.list()
+        vector_dbs = [vector_store.id for vector_store in vector_stores.data]
         selected_vector_dbs = st.multiselect(
             label="Select Document Collections to use in RAG queries",
             options=vector_dbs,
@@ -231,11 +253,20 @@ def rag_chat_page():
         if len(st.session_state.messages) == 0:
             st.session_state.messages.append({"role": "system", "content": system_prompt})
 
-        # Query the vector DB
-        rag_response = llama_stack_api.client.tool_runtime.rag_tool.query(
-            content=prompt, vector_db_ids=list(selected_vector_dbs)
-        )
-        prompt_context = rag_response.content
+        # Query the vector stores using modern API
+        retrieved_chunks = []
+        for vector_store_id in selected_vector_dbs:
+            search_results = llama_stack_api.client.vector_stores.search(
+                vector_store_id=vector_store_id,
+                query=prompt,
+                max_num_results=5,
+                search_mode="vector"
+            )
+            # Extract content from search results
+            for result in search_results.data:
+                retrieved_chunks.append(result.content[0].text)
+        
+        prompt_context = "\n\n".join(retrieved_chunks)
 
         with st.chat_message("assistant"):
             with st.expander(label="Retrieval Output", expanded=False):
@@ -251,12 +282,11 @@ def rag_chat_page():
 
             # Run inference directly
             st.session_state.messages.append({"role": "user", "content": extended_prompt})
-            response = llama_stack_api.client.inference.chat_completion(
+            response = llama_stack_api.client.chat.completions.create(
                 messages=st.session_state.messages,
-                model_id=selected_model,
-                sampling_params={
-                    "strategy": strategy,
-                },
+                model=selected_model,
+                temperature=temperature,
+                max_tokens=max_tokens,
                 stream=True,
             )
 

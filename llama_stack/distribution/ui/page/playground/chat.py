@@ -12,7 +12,7 @@ import streamlit as st
 from llama_stack_client import Agent, AgentEventLogger
 from llama_stack_client.lib.agents.react.agent import ReActAgent
 from llama_stack_client.lib.agents.react.tool_parser import ReActOutput
-from llama_stack.apis.common.content_types import ToolCallDelta
+from llama_stack_client.types import ToolCallDelta
 from llama_stack.distribution.ui.modules.api import llama_stack_api
 
 
@@ -83,7 +83,7 @@ def tool_chat_page():
 
     client = llama_stack_api.client
     models = client.models.list()
-    model_list = [model.identifier for model in models if model.api_model_type == "llm"]
+    model_list = [model.identifier for model in models if model.model_type == "llm"]
 
     tool_groups = client.toolgroups.list()
     tool_groups_list = [tool_group.identifier for tool_group in tool_groups]
@@ -117,10 +117,10 @@ def tool_chat_page():
         
         toolgroup_selection = []
         if processing_mode == "Direct":
-            vector_dbs = llama_stack_api.client.vector_dbs.list() or []
-            if not vector_dbs:
-                st.info("No vector databases available for selection.")
-            vector_dbs = [vector_db.identifier for vector_db in vector_dbs]
+            vector_stores = llama_stack_api.client.vector_stores.list() or []
+            if not vector_stores.data:
+                st.info("No vector stores available for selection.")
+            vector_dbs = [vector_store.id for vector_store in vector_stores.data]
             selected_vector_dbs = st.multiselect(
                 label="Select Document Collections to use in RAG queries",
                 options=vector_dbs,
@@ -139,10 +139,10 @@ def tool_chat_page():
             )
 
             if "builtin::rag" in toolgroup_selection:
-                vector_dbs = llama_stack_api.client.vector_dbs.list() or []
-                if not vector_dbs:
-                    st.info("No vector databases available for selection.")
-                vector_dbs = [vector_db.identifier for vector_db in vector_dbs]
+                vector_stores = llama_stack_api.client.vector_stores.list() or []
+                if not vector_stores.data:
+                    st.info("No vector stores available for selection.")
+                vector_dbs = [vector_store.id for vector_store in vector_stores.data]
                 selected_vector_dbs = st.multiselect(
                     label="Select Document Collections to use in RAG queries",
                     options=vector_dbs,
@@ -490,14 +490,23 @@ def tool_chat_page():
 
 
     def direct_process_prompt(prompt, debug_events_list):
-        # Query the vector DB
+        # Query the vector stores using modern API
         if selected_vector_dbs:
             with st.spinner("Retrieving context (RAG)..."):
                 try:
-                    rag_response = llama_stack_api.client.tool_runtime.rag_tool.query(
-                        content=prompt, vector_db_ids=list(selected_vector_dbs) 
-                    )
-                    prompt_context = rag_response.content
+                    retrieved_chunks = []
+                    for vector_store_id in selected_vector_dbs:
+                        search_results = llama_stack_api.client.vector_stores.search(
+                            vector_store_id=vector_store_id,
+                            query=prompt,
+                            max_num_results=5,
+                            search_mode="vector"
+                        )
+                        # Extract content from search results
+                        for result in search_results.data:
+                            retrieved_chunks.append(result.content[0].text)
+                    
+                    prompt_context = "\n\n".join(retrieved_chunks)
                     debug_events_list.append({
                         "type": "rag_query_direct_mode", "query": prompt,
                         "vector_dbs": selected_vector_dbs,
@@ -527,14 +536,12 @@ def tool_chat_page():
                 [{'role': 'system', 'content': system_prompt}] +
                 [{'role': 'user', 'content': extended_prompt}]
             )
-            response = llama_stack_api.client.inference.chat_completion(
+            response = llama_stack_api.client.chat.completions.create(
                 messages=messages_for_direct_api,
-                model_id=model,
-                sampling_params={
-                    "strategy": get_strategy(temperature, top_p),
-                    "max_tokens": max_tokens,
-                    "repetition_penalty": repetition_penalty,
-                },
+                model=model,
+                temperature=temperature,
+                top_p=top_p,
+                max_tokens=max_tokens,
                 stream=True,
             )
 
