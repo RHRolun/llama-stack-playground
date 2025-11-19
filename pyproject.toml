@@ -1,0 +1,19 @@
+[project]
+name = "llama_stack"
+version = "6"
+description = "Local LLM stack with UI for RAG-based applications"
+authors = [
+    { name = "Saurabh Agarwal", email = "sauagarw@redhat.com" }
+]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "streamlit",
+    "pandas",
+    "llama-stack-client==0.2.9",
+    "requests",       
+    "streamlit-option-menu",        
+    "llama-stack==0.2.9",
+]
+
+[tool.setuptools]
