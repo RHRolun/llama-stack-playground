@@ -6,7 +6,7 @@
 
 import streamlit as st
 
-from llama_stack.distribution.ui.modules.api import llama_stack_api
+from ...modules.api import llama_stack_api
 
 
 def shields():

@@ -3,6 +3,13 @@
 #
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
+import sys
+import os
+
+# Add the current directory to Python path to enable relative imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, current_dir)
+
 import streamlit as st
 
 def main():

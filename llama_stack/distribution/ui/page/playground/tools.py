@@ -13,7 +13,7 @@ from llama_stack_client import Agent
 from llama_stack_client.lib.agents.react.agent import ReActAgent
 from llama_stack_client.lib.agents.react.tool_parser import ReActOutput
 
-from llama_stack.distribution.ui.modules.api import llama_stack_api
+from ...modules.api import llama_stack_api
 
 
 class AgentType(enum.Enum):

@@ -13,7 +13,7 @@ from llama_stack_client import Agent, AgentEventLogger
 from llama_stack_client.lib.agents.react.agent import ReActAgent
 from llama_stack_client.lib.agents.react.tool_parser import ReActOutput
 from llama_stack.apis.common.content_types import ToolCallDelta
-from llama_stack.distribution.ui.modules.api import llama_stack_api
+from modules.api import llama_stack_api
 
 
 class AgentType(enum.Enum):
@@ -545,16 +545,16 @@ def tool_chat_page():
                 stream=True,
             )
 
-            # Display assistant response
+            # Display assistant response with 0.3.0 streaming format
             for chunk in response:
-                if chunk.event:
-                    response_delta = chunk.event.delta
-                    if isinstance(response_delta, ToolCallDelta):
-                        retrieval_response += response_delta.tool_call.replace("====", "").strip()
-                        #retrieval_message_placeholder.info(retrieval_response)
-                    else:
-                        full_response += chunk.event.delta.text
+                if hasattr(chunk, 'choices') and chunk.choices:
+                    delta = chunk.choices[0].delta
+                    if hasattr(delta, 'content') and delta.content:
+                        full_response += delta.content
                         message_placeholder.markdown(full_response + "▌")
+                elif hasattr(chunk, 'content'):
+                    full_response += chunk.content
+                    message_placeholder.markdown(full_response + "▌")
             message_placeholder.markdown(full_response)
 
         response_dict = {"role": "assistant", "content": full_response, "stop_reason": "end_of_message"}
